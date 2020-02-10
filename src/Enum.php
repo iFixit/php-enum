@@ -39,13 +39,29 @@ abstract class Enum implements \JsonSerializable
     /**
      * Creates a new value of some type
      *
-     * @param mixed $value
+     * @param mixed $value The value to use in the enum (must be the value of one of the class constants)
+     * @param string? $key A key to look up a value for (when this is passed, $value must be `null`)
      *
-     * @psalm-param static<T>|T $value
+     * @psalm-param static<T>|T|null $value
      * @throws \UnexpectedValueException if incompatible type is given.
      */
-    public function __construct($value)
+    public function __construct($value, string $key=null)
     {
+        if (!is_null($key)) {
+            // Construct an enum value using the value provided in a class constant
+            if (!is_null($value)) {
+                // We want to look up the value from the array of constants; don't let the user pass a value.
+                throw new \BadMethodCallException("Passing a value is not allowed when passing a constant key");
+            }
+            $array = static::toArray();
+            if (isset($array[$key]) || \array_key_exists($key, $array)) {
+                return new static($array[$key]);
+            }
+
+            throw new \BadMethodCallException("No static method or enum constant '$key' in class " . static::class);
+        }
+
+
         if ($value instanceof static) {
            /** @psalm-var T */
             $value = $value->getValue();
@@ -204,17 +220,12 @@ abstract class Enum implements \JsonSerializable
      * @param array  $arguments
      *
      * @return static
-     * @psalm-external-mutation-free
+     * @psalm-pure
      * @throws \BadMethodCallException
      */
     public static function __callStatic($name, $arguments)
     {
-        $array = static::toArray();
-        if (isset($array[$name]) || \array_key_exists($name, $array)) {
-            return new static($array[$name]);
-        }
-
-        throw new \BadMethodCallException("No static method or enum constant '$name' in class " . static::class);
+        return new static(null, $name);
     }
 
     /**
